@@ -1,0 +1,364 @@
+{
+  "name": "Veille Automatisée",
+  "nodes": [
+    {
+      "id": "node-1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [1],
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-2",
+      "name": "Get Active Topics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://cautious-ibis-698.convex.site/api/topics",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "7db4f78b259f2085037d9f35216e04de9b2591b530bb443855956f9af45081da"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-3",
+      "name": "Split Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = new Date();\nconst day = d.getDay();\nconst diff = day === 0 ? -6 : 1 - day;\nd.setDate(d.getDate() + diff);\nconst weekStart = d.toISOString().split('T')[0];\n\nreturn $input.all().map(item => ({\n  json: { ...item.json, weekStart }\n}));"
+      }
+    },
+    {
+      "id": "node-4",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "node-5",
+      "name": "Build All Feed URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const topic = $input.first().json;\nconst items = [];\n\nfor (const url of (topic.rssUrls || [])) {\n  items.push({\n    json: {\n      feedUrl: url,\n      feedType: 'rss',\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nfor (const keyword of (topic.keywords || [])) {\n  items.push({\n    json: {\n      feedUrl: `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=fr&gl=FR&ceid=FR:fr`,\n      feedType: 'google_news',\n      keyword,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nreturn items;"
+      }
+    },
+    {
+      "id": "node-6",
+      "name": "Fetch All Feeds",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.feedUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "text"
+        }
+      }
+    },
+    {
+      "id": "node-7",
+      "name": "Normalize Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const topic = $('Loop Over Items').first().json;\nconst allArticles = [];\n\nfor (const inputItem of $input.all()) {\n  if (inputItem.json.error) continue;\n  const xmlText = inputItem.json.data || '';\n  if (!xmlText || typeof xmlText !== 'string') continue;\n\n  const itemRegex = /<item>([\\s\\S]*?)<\\/item>|<entry>([\\s\\S]*?)<\\/entry>/g;\n  let match;\n  while ((match = itemRegex.exec(xmlText)) !== null) {\n    const itemXml = match[1] || match[2];\n\n    const getTag = (tag) => {\n      const m = itemXml.match(new RegExp(`<${tag}(?:[^>]*)>(?:<!\\\\[CDATA\\\\[)?([\\\\s\\\\S]*?)(?:\\\\]\\\\]>)?<\\/${tag}>`));\n      return m ? m[1].trim() : '';\n    };\n\n    const title = getTag('title');\n    let url = getTag('link');\n    if (!url) {\n      const m = itemXml.match(/<link[^>]*href=\"([^\"]+)\"/);\n      url = m ? m[1] : getTag('guid');\n    }\n    const pubDate = getTag('pubDate') || getTag('published') || getTag('updated');\n    const content = (getTag('description') || getTag('summary') || '').replace(/<[^>]+>/g, '').slice(0, 500);\n\n    if (!title || !url) continue;\n\n    let source = '';\n    try { source = new URL(url).hostname.replace('www.', ''); } catch(e) { source = 'unknown'; }\n\n    allArticles.push({\n      json: { title, url, pubDate, content, source, topicId: topic._id, topicName: topic.name, topicRecipients: topic.recipients, weekStart: topic.weekStart }\n    });\n  }\n}\n\nif (allArticles.length === 0) {\n  throw new Error('Aucun article extrait des flux RSS — toutes les sources ont échoué ou sont vides.');\n}\n\nreturn allArticles;"
+      }
+    },
+    {
+      "id": "node-8",
+      "name": "Deduplicate by URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const seen = new Set();\nreturn $input.all().filter(item => {\n  const url = item.json.url;\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n  return true;\n}).map(item => ({ json: item.json }));"
+      }
+    },
+    {
+      "id": "node-9",
+      "name": "Filter Last 7 Days",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;\nreturn $input.all().filter(item => {\n  const pub = new Date(item.json.pubDate).getTime();\n  return !isNaN(pub) && pub >= sevenDaysAgo;\n}).map(item => ({ json: item.json }));"
+      }
+    },
+    {
+      "id": "node-10",
+      "name": "Sort and Cap at 50",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all()\n  .sort((a, b) => new Date(b.json.pubDate) - new Date(a.json.pubDate))\n  .slice(0, 30)\n  .map(item => ({ json: item.json }));"
+      }
+    },
+    {
+      "id": "node-11",
+      "name": "Aggregate for LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const articles = $input.all().map(i => i.json);\nconst topic = $('Loop Over Items').first().json;\n\nif (articles.length === 0) {\n  throw new Error(`Aucun article trouvé pour le sujet \"${topic.name}\" cette semaine.`);\n}\n\nconst articleList = articles.map((a, i) =>\n  `[${i+1}] TITRE: ${a.title}\\nSOURCE: ${a.source}\\nDATE: ${a.pubDate}\\nURL: ${a.url}`\n).join('\\n\\n---\\n\\n');\n\nreturn [{\n  json: {\n    topicId: topic._id,\n    topicName: topic.name,\n    topicRecipients: topic.recipients,\n    weekStart: topic.weekStart,\n    articleCount: articles.length,\n    articleList,\n    rawArticles: articles\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-11b",
+      "name": "Prepare OpenAI Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2550, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $input.first().json;\nconst requestBody = {\n  model: 'gpt-4o-mini',\n  temperature: 0.3,\n  max_tokens: 16000,\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un analyste expert en veille stratégique, spécialisé dans le domaine \"' + d.topicName + '\". Tu dois TOUJOURS répondre avec un JSON valide, sans markdown, sans commentaire, uniquement le JSON brut.'\n    },\n    {\n      role: 'user',\n      content: 'Voici ' + d.articleCount + ' articles collectés cette semaine sur le sujet \"' + d.topicName + '\".\\n\\n' + d.articleList + '\\n\\nAnalyse ces articles et réponds UNIQUEMENT avec ce JSON (pas de markdown, juste le JSON brut) :\\n\\n{\"synthesis\": \"Synthèse executive en 5-7 phrases sur les tendances clés de la semaine.\", \"articles\": [{\"title\": \"titre exact\", \"url\": \"url exacte\", \"source\": \"nom de la source\", \"category\": \"Stratégie|Innovation|Marchés|Réglementation|International|Autre\", \"summary\": \"résumé en 1 phrase\"}]}\\n\\nRègles : inclus TOUS les articles, hors sujet = category Autre, n invente rien.'\n    }\n  ]\n};\n\nreturn [{\n  json: {\n    topicId: d.topicId,\n    topicName: d.topicName,\n    topicRecipients: d.topicRecipients,\n    weekStart: d.weekStart,\n    articleCount: d.articleCount,\n    rawArticles: d.rawArticles,\n    requestBody\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-12",
+      "name": "OpenAI Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "JMmyAJBqHTsiuq7d",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "node-13",
+      "name": "Parse LLM Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const topic = $('Loop Over Items').first().json;\nconst raw = $input.first().json.choices?.[0]?.message?.content\n  || $input.first().json.message?.content\n  || $input.first().json.text\n  || '';\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`LLM_PARSE_ERROR: ${e.message} | Début: ${raw.slice(0, 300)}`);\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error(`LLM_STRUCTURE_ERROR: synthesis ou articles manquants`);\n}\n\nreturn [{\n  json: {\n    topicId: topic._id,\n    topicName: topic.name,\n    topicRecipients: topic.recipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-14",
+      "name": "Store in Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://cautious-ibis-698.convex.site/api/results",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "7db4f78b259f2085037d9f35216e04de9b2591b530bb443855956f9af45081da"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ topicId: $json.topicId, weekStart: $json.weekStart, synthesis: $json.synthesis, articles: $json.articles, generatedAt: $json.generatedAt }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-15",
+      "name": "Build HTML Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $('Parse LLM Output').first().json;\nconst weekLabel = new Date(data.weekStart).toLocaleDateString('fr-FR', {\n  day: 'numeric', month: 'long', year: 'numeric'\n});\n\nconst categoryOrder = ['Stratégie', 'Innovation', 'Marchés', 'Réglementation', 'International', 'Autre'];\nconst byCategory = {};\nfor (const article of data.articles) {\n  const cat = article.category || 'Autre';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(article);\n}\n\nconst categoryBlocks = categoryOrder\n  .filter(cat => byCategory[cat])\n  .map(cat => {\n    const items = byCategory[cat].map(a =>\n      `<tr><td style=\"padding:12px;border-bottom:1px solid #f0f0f0;vertical-align:top;\">\n        <a href=\"${a.url}\" style=\"color:#1a73e8;font-weight:600;text-decoration:none;\">${a.title}</a><br>\n        <span style=\"color:#888;font-size:12px;\">${a.source}</span><br>\n        <p style=\"margin:6px 0 0;color:#333;font-size:13px;line-height:1.5;\">${a.summary}</p>\n      </td></tr>`\n    ).join('');\n    return `<h3 style=\"color:#1a73e8;border-left:3px solid #1a73e8;padding-left:10px;margin-top:28px;\">${cat}</h3>\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;\">${items}</table>`;\n  }).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px;color:#333;\">\n  <div style=\"background:#1a73e8;color:white;padding:24px;border-radius:8px 8px 0 0;\">\n    <h1 style=\"margin:0;font-size:22px;\">Veille ${data.topicName}</h1>\n    <p style=\"margin:6px 0 0;opacity:0.85;font-size:14px;\">Semaine du ${weekLabel} &middot; ${data.articles.length} articles analysés</p>\n  </div>\n  <div style=\"background:#f8f9fa;padding:20px;border-left:4px solid #1a73e8;margin:16px 0;border-radius:0 4px 4px 0;\">\n    <h2 style=\"margin:0 0 10px;font-size:16px;color:#1a73e8;\">Synthèse de la semaine</h2>\n    <p style=\"margin:0;line-height:1.7;\">${data.synthesis}</p>\n  </div>\n  <h2 style=\"font-size:16px;margin-top:24px;\">Articles par catégorie</h2>\n  ${categoryBlocks}\n  <div style=\"margin-top:32px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:11px;\">\n    Généré automatiquement le ${new Date(data.generatedAt).toLocaleString('fr-FR')} &middot; Veille Automatisée\n  </div>\n</body></html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlEmail: html,\n    subject: `[Veille ${data.topicName}] Semaine du ${weekLabel} — ${data.articles.length} articles`,\n    to: ['developer@reboot-conseil.com']\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-16",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3540, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nsohPqslhjExItUM",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "node-err1",
+      "name": "Format Error Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 520],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const err = $input.first().json;\nlet topicName = 'inconnu';\ntry { topicName = $('Loop Over Items').first().json.name; } catch(e) {}\n\nreturn [{\n  json: {\n    subject: `[ERREUR Veille] Sujet \"${topicName}\" — ${new Date().toLocaleString('fr-FR')}`,\n    to: ['developer@reboot-conseil.com'],\n    htmlEmail: `<p>Une erreur est survenue dans le workflow de veille pour le sujet <strong>${topicName}</strong>.</p><p><strong>Erreur :</strong> ${err.message || JSON.stringify(err)}</p><p>L'exécution continue pour les autres sujets.</p>`\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-err2",
+      "name": "Send Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 520],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
+        "options": {}
+      },
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Get Active Topics", "type": "main", "index": 0 }]]
+    },
+    "Get Active Topics": {
+      "main": [[{ "node": "Split Topics", "type": "main", "index": 0 }]]
+    },
+    "Split Topics": {
+      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [{ "node": "Build All Feed URLs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build All Feed URLs": {
+      "main": [[{ "node": "Fetch All Feeds", "type": "main", "index": 0 }]]
+    },
+    "Fetch All Feeds": {
+      "main": [[{ "node": "Normalize Articles", "type": "main", "index": 0 }]]
+    },
+    "Normalize Articles": {
+      "main": [[{ "node": "Deduplicate by URL", "type": "main", "index": 0 }]]
+    },
+    "Deduplicate by URL": {
+      "main": [[{ "node": "Filter Last 7 Days", "type": "main", "index": 0 }]]
+    },
+    "Filter Last 7 Days": {
+      "main": [[{ "node": "Sort and Cap at 50", "type": "main", "index": 0 }]]
+    },
+    "Sort and Cap at 50": {
+      "main": [[{ "node": "Aggregate for LLM", "type": "main", "index": 0 }]]
+    },
+    "Aggregate for LLM": {
+      "main": [[{ "node": "Prepare OpenAI Body", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+    },
+    "Prepare OpenAI Body": {
+      "main": [[{ "node": "OpenAI Analysis", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Analysis": {
+      "main": [[{ "node": "Parse LLM Output", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+    },
+    "Parse LLM Output": {
+      "main": [[{ "node": "Store in Convex", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+    },
+    "Store in Convex": {
+      "main": [[{ "node": "Build HTML Email", "type": "main", "index": 0 }]]
+    },
+    "Build HTML Email": {
+      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
+    },
+    "Send Email": {
+      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+    },
+    "Format Error Alert": {
+      "main": [[{ "node": "Send Error Alert", "type": "main", "index": 0 }]]
+    },
+    "Send Error Alert": {
+      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

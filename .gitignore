@@ -1,0 +1,16 @@
+# Secrets
+.env
+.env.local
+
+# Convex generated
+convex/_generated/
+.convex/
+
+# Node
+node_modules/
+
+# n8n runtime data
+n8n/data/
+
+# macOS
+.DS_Store
