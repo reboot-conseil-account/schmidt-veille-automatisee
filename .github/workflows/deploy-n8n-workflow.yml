@@ -18,4 +18,4 @@ jobs:
             "${{ secrets.N8N_URL }}/api/v1/workflows/${{ secrets.N8N_WORKFLOW_ID }}" \
             -H "X-N8N-API-KEY: ${{ secrets.N8N_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d @n8n/workflows/veille-automatisee.json
+            -d "$(jq 'del(.active)' n8n/workflows/veille-automatisee.json)"
