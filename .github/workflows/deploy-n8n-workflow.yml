@@ -17,8 +17,7 @@ jobs:
         run: |
           jq '
             del(.active) |
-            (.nodes[] | select(.credentials.openAiApi) | .credentials.openAiApi.id) = "${{ secrets.N8N_PROD_OPENAI_CREDENTIAL_ID }}" |
-            (.nodes[] | select(.credentials.httpHeaderAuth) | .credentials.httpHeaderAuth.id) = "${{ secrets.N8N_PROD_RESEND_CREDENTIAL_ID }}"
+            (.nodes[] | select(.credentials.openAiApi) | .credentials.openAiApi.id) = "${{ secrets.N8N_PROD_OPENAI_CREDENTIAL_ID }}"
           ' n8n/workflows/veille-automatisee.json | \
           curl --fail-with-body -s -X PUT \
             "${{ secrets.N8N_URL }}/api/v1/workflows/${{ secrets.N8N_WORKFLOW_ID }}" \

@@ -245,19 +245,20 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.resend.com/emails",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
         "options": {}
-      },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "nsohPqslhjExItUM",
-          "name": "Header Auth account 2"
-        }
       }
     },
     {
@@ -280,15 +281,21 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.resend.com/emails",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
         "options": {}
-      },
-      "credentials": {}
+      }
     }
   ],
   "connections": {

@@ -43,6 +43,8 @@ services:
       # Convex
       CONVEX_URL: ${CONVEX_URL}
       CONVEX_API_KEY: ${CONVEX_API_KEY}
+      # Resend
+      RESEND_API_KEY: ${RESEND_API_KEY}
       # Allow $env access in node expressions
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Telemetry
