@@ -1,0 +1,21 @@
+name: Deploy n8n workflow
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "n8n/workflows/veille-automatisee.json"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push workflow to n8n
+        run: |
+          curl --fail-with-body -s -X PUT \
+            "${{ secrets.N8N_URL }}/api/v1/workflows/${{ secrets.N8N_WORKFLOW_ID }}" \
+            -H "X-N8N-API-KEY: ${{ secrets.N8N_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d @n8n/workflows/veille-automatisee.json
