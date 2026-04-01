@@ -40,6 +40,11 @@ services:
       # Timezone
       GENERIC_TIMEZONE: ${TIMEZONE:-Europe/Paris}
       TZ: ${TIMEZONE:-Europe/Paris}
+      # Convex
+      CONVEX_URL: ${CONVEX_URL}
+      CONVEX_API_KEY: ${CONVEX_API_KEY}
+      # Allow $env access in node expressions
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Telemetry
       N8N_DIAGNOSTICS_ENABLED: "false"
     volumes:

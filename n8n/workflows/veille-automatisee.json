@@ -29,13 +29,13 @@
       "position": [460, 300],
       "parameters": {
         "method": "GET",
-        "url": "https://cautious-ibis-698.convex.site/api/topics",
+        "url": "={{ $env.CONVEX_URL }}/api/topics",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-api-key",
-              "value": "7db4f78b259f2085037d9f35216e04de9b2591b530bb443855956f9af45081da"
+              "value": "={{ $env.CONVEX_API_KEY }}"
             }
           ]
         },
@@ -208,13 +208,13 @@
       "position": [3100, 300],
       "parameters": {
         "method": "POST",
-        "url": "https://cautious-ibis-698.convex.site/api/results",
+        "url": "={{ $env.CONVEX_URL }}/api/results",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-api-key",
-              "value": "7db4f78b259f2085037d9f35216e04de9b2591b530bb443855956f9af45081da"
+              "value": "={{ $env.CONVEX_API_KEY }}"
             }
           ]
         },
