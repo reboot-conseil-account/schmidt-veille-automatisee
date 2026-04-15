@@ -175,7 +175,7 @@
       "position": [2550, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const d = $input.first().json;\nconst requestBody = {\n  model: 'gpt-4o-mini',\n  temperature: 0.3,\n  max_tokens: 16000,\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un analyste expert en veille stratégique, spécialisé dans le domaine \"' + d.topicName + '\". Tu dois TOUJOURS répondre avec un JSON valide, sans markdown, sans commentaire, uniquement le JSON brut.'\n    },\n    {\n      role: 'user',\n      content: 'Voici ' + d.articleCount + ' articles collectés cette semaine sur le sujet \"' + d.topicName + '\".\\n\\n' + d.articleList + '\\n\\nAnalyse ces articles et réponds UNIQUEMENT avec ce JSON (pas de markdown, juste le JSON brut) :\\n\\n{\"synthesis\": \"Synthèse executive en 5-7 phrases sur les tendances clés de la semaine.\", \"articles\": [{\"title\": \"titre exact\", \"url\": \"url exacte\", \"source\": \"nom de la source\", \"category\": \"Stratégie|Innovation|Marchés|Réglementation|International|Autre\", \"summary\": \"résumé en 1 phrase\"}]}\\n\\nRègles : inclus TOUS les articles, hors sujet = category Autre, n invente rien.'\n    }\n  ]\n};\n\nreturn [{\n  json: {\n    topicId: d.topicId,\n    topicName: d.topicName,\n    topicRecipients: d.topicRecipients,\n    weekStart: d.weekStart,\n    articleCount: d.articleCount,\n    rawArticles: d.rawArticles,\n    requestBody\n  }\n}];"
+        "jsCode": "const d = $input.first().json;\nconst requestBody = {\n  model: 'gpt-5-mini',\n\n  max_completion_tokens: 16000,\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un analyste expert en veille stratégique, spécialisé dans le domaine \"' + d.topicName + '\". Tu dois TOUJOURS répondre avec un JSON valide, sans markdown, sans commentaire, uniquement le JSON brut.'\n    },\n    {\n      role: 'user',\n      content: 'Voici ' + d.articleCount + ' articles collectés cette semaine sur le sujet \"' + d.topicName + '\".\\n\\n' + d.articleList + '\\n\\nAnalyse ces articles et réponds UNIQUEMENT avec ce JSON (pas de markdown, juste le JSON brut) :\\n\\n{\"synthesis\": \"Synthèse executive en 5-7 phrases sur les tendances clés de la semaine.\", \"articles\": [{\"title\": \"titre exact\", \"url\": \"url exacte\", \"source\": \"nom de la source\", \"category\": \"Stratégie|Innovation|Marchés|Réglementation|International|Autre\", \"summary\": \"résumé en 1 phrase\"}]}\\n\\nRègles : inclus TOUS les articles, hors sujet = category Autre, n invente rien.'\n    }\n  ]\n};\n\nreturn [{\n  json: {\n    topicId: d.topicId,\n    topicName: d.topicName,\n    topicRecipients: d.topicRecipients,\n    weekStart: d.weekStart,\n    articleCount: d.articleCount,\n    rawArticles: d.rawArticles,\n    requestBody\n  }\n}];"
       }
     },
     {
@@ -197,7 +197,7 @@
       },
       "credentials": {
         "openAiApi": {
-          "id": "JMmyAJBqHTsiuq7d",
+          "id": "OTnqwmGPWwgu1Q7B",
           "name": "OpenAi account"
         }
       }
@@ -210,7 +210,7 @@
       "position": [2880, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const topic = $('Prepare OpenAI Body').first().json;\nconst raw = $input.first().json.choices?.[0]?.message?.content\n  || $input.first().json.message?.content\n  || $input.first().json.text\n  || '';\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`LLM_PARSE_ERROR: ${e.message} | Début: ${raw.slice(0, 300)}`);\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error(`LLM_STRUCTURE_ERROR: synthesis ou articles manquants`);\n}\n\nreturn [{\n  json: {\n    topicId: topic.topicId,\n    topicName: topic.topicName,\n    topicRecipients: topic.topicRecipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
+        "jsCode": "const openAiResponse = $input.first().json;\nconst topic = $('Prepare OpenAI Body').first().json;\nconst raw = openAiResponse.choices?.[0]?.message?.content\n  || openAiResponse.message?.content\n  || openAiResponse.text\n  || '';\n\nif (!raw) throw new Error('LLM_EMPTY_RESPONSE');\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('LLM_PARSE_ERROR: ' + e.message + ' | Debut: ' + raw.slice(0, 300));\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error('LLM_STRUCTURE_ERROR: synthesis ou articles manquants');\n}\n\nreturn [{\n  json: {\n    topicId: topic.topicId,\n    topicName: topic.topicName,\n    topicRecipients: topic.topicRecipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
       }
     },
     {
@@ -246,31 +246,42 @@
       "position": [3320, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const data = $('Parse LLM Output').first().json;\nconst weekLabel = new Date(data.weekStart).toLocaleDateString('fr-FR', {\n  day: 'numeric', month: 'long', year: 'numeric'\n});\n\nconst categoryOrder = ['Stratégie', 'Innovation', 'Marchés', 'Réglementation', 'International', 'Autre'];\nconst byCategory = {};\nfor (const article of data.articles) {\n  const cat = article.category || 'Autre';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(article);\n}\n\nconst categoryBlocks = categoryOrder\n  .filter(cat => byCategory[cat])\n  .map(cat => {\n    const items = byCategory[cat].map(a =>\n      `<tr><td style=\"padding:12px;border-bottom:1px solid #f0f0f0;vertical-align:top;\">\n        <a href=\"${a.url}\" style=\"color:#1a73e8;font-weight:600;text-decoration:none;\">${a.title}</a><br>\n        <span style=\"color:#888;font-size:12px;\">${a.source}</span><br>\n        <p style=\"margin:6px 0 0;color:#333;font-size:13px;line-height:1.5;\">${a.summary}</p>\n      </td></tr>`\n    ).join('');\n    return `<h3 style=\"color:#1a73e8;border-left:3px solid #1a73e8;padding-left:10px;margin-top:28px;\">${cat}</h3>\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;\">${items}</table>`;\n  }).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px;color:#333;\">\n  <div style=\"background:#1a73e8;color:white;padding:24px;border-radius:8px 8px 0 0;\">\n    <h1 style=\"margin:0;font-size:22px;\">Veille ${data.topicName}</h1>\n    <p style=\"margin:6px 0 0;opacity:0.85;font-size:14px;\">Semaine du ${weekLabel} &middot; ${data.articles.length} articles analysés</p>\n  </div>\n  <div style=\"background:#f8f9fa;padding:20px;border-left:4px solid #1a73e8;margin:16px 0;border-radius:0 4px 4px 0;\">\n    <h2 style=\"margin:0 0 10px;font-size:16px;color:#1a73e8;\">Synthèse de la semaine</h2>\n    <p style=\"margin:0;line-height:1.7;\">${data.synthesis}</p>\n  </div>\n  <h2 style=\"font-size:16px;margin-top:24px;\">Articles par catégorie</h2>\n  ${categoryBlocks}\n  <div style=\"margin-top:32px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:11px;\">\n    Généré automatiquement le ${new Date(data.generatedAt).toLocaleString('fr-FR')} &middot; Veille Automatisée\n  </div>\n</body></html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlEmail: html,\n    subject: `[Veille ${data.topicName}] Semaine du ${weekLabel} — ${data.articles.length} articles`,\n    to: ['developer@reboot-conseil.com']\n  }\n}];"
+        "jsCode": "const data = $('Parse LLM Output').first().json;\nconst weekLabel = new Date(data.weekStart).toLocaleDateString('fr-FR', {\n  day: 'numeric', month: 'long', year: 'numeric'\n});\n\nconst categoryOrder = ['Stratégie', 'Innovation', 'Marchés', 'Réglementation', 'International', 'Autre'];\nconst byCategory = {};\nfor (const article of data.articles) {\n  const cat = article.category || 'Autre';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(article);\n}\n\nconst categoryBlocks = categoryOrder\n  .filter(cat => byCategory[cat])\n  .map(cat => {\n    const items = byCategory[cat].map(a =>\n      '<div style=\"margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0;\">'\n      + '<a href=\"' + a.url + '\" style=\"color:#C0272D;font-weight:600;text-decoration:none;font-size:14px;\">' + a.title + '</a><br>'\n      + '<span style=\"color:#999;font-size:12px;\">' + a.source + '</span>'\n      + '<p style=\"margin:6px 0 0;color:#555;font-size:13px;line-height:1.6;\">' + a.summary + '</p>'\n      + '</div>'\n    ).join('');\n    return '<div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #C0272D;padding-bottom:5px;margin:24px 0 12px;\">' + cat + '</div>' + items;\n  }).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;\">\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f2f2f2;\"><tr><td align=\"center\" style=\"padding:24px 16px;\">\n<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;\">\n<tr><td style=\"background:#C0272D;padding:32px 40px;text-align:center;\">\n  <div style=\"color:#ffffff;font-size:46px;font-weight:300;letter-spacing:4px;line-height:1;font-family:Georgia,serif;\">Schmidt</div>\n  <div style=\"color:rgba(255,255,255,0.9);font-size:12px;letter-spacing:8px;margin-top:4px;font-family:Arial,sans-serif;\">GROUPE</div>\n  <div style=\"height:1px;background:rgba(255,255,255,0.25);margin:18px 0;\"></div>\n  <div style=\"color:#ffffff;font-size:18px;font-weight:600;\">Veille ${data.topicName}</div>\n  <div style=\"color:rgba(255,255,255,0.8);font-size:13px;margin-top:6px;\">Semaine du ${weekLabel} &middot; ${data.articles.length} articles analysés</div>\n</td></tr>\n<tr><td style=\"padding:28px 36px 16px;\">\n  <div style=\"border-left:4px solid #C0272D;padding:14px 18px;background:#fdf5f5;\">\n    <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;\">Synthèse de la semaine</div>\n    <div style=\"font-size:14px;line-height:1.75;color:#333;\">${data.synthesis}</div>\n  </div>\n</td></tr>\n<tr><td style=\"padding:0 36px 36px;\">\n  <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px;\">Articles par catégorie</div>\n  ${categoryBlocks}\n</td></tr>\n<tr><td style=\"background:#C0272D;padding:14px 36px;text-align:center;\">\n  <div style=\"color:rgba(255,255,255,0.7);font-size:11px;\">Généré le ${new Date(data.generatedAt).toLocaleString('fr-FR')} &middot; Schmidt Groupe &middot; Veille Automatisée</div>\n</td></tr>\n</table>\n</td></tr></table>\n</body></html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlEmail: html,\n    subject: `[Veille ${data.topicName}] Semaine du ${weekLabel} — ${data.articles.length} articles`,\n    to: data.topicRecipients || []\n  }\n}];"
       }
     },
     {
-      "id": "node-16",
-      "name": "Send Email",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "node-16a",
+      "name": "Prepare ACS Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [3540, 300],
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const crypto = require('crypto');\nconst data = $input.first().json;\nconst endpoint = $env.AZURE_COMMUNICATION_ENDPOINT;\nconst accessKey = $env.AZURE_COMMUNICATION_ACCESS_KEY;\nconst fromAddress = $env.AZURE_COMMUNICATION_FROM_ADDRESS;\n\nconst bodyObj = {\n  senderAddress: fromAddress,\n  content: { subject: data.subject, html: data.htmlEmail },\n  recipients: { to: (data.to || []).map(addr => ({ address: addr })) }\n};\nconst bodyStr = JSON.stringify(bodyObj);\n\nconst pathAndQuery = '/emails:send?api-version=2023-03-31';\nconst host = endpoint.replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\nconst fullUrl = endpoint.replace(/\\/$/, '') + pathAndQuery;\nconst dateStr = new Date().toUTCString();\n\nconst contentHash = crypto.createHash('sha256').update(bodyStr).digest('base64');\nconst stringToSign = 'POST\\n' + pathAndQuery + '\\n' + dateStr + ';' + host + ';' + contentHash;\nconst signature = crypto.createHmac('sha256', Buffer.from(accessKey, 'base64')).update(stringToSign).digest('base64');\nconst authorization = 'HMAC-SHA256 SignedHeaders=date;host;x-ms-content-sha256&Signature=' + signature;\n\nreturn [{ json: { ...data, _acsUrl: fullUrl, _acsBody: bodyStr, _acsDate: dateStr, _acsContentHash: contentHash, _acsAuthorization: authorization } }];"
+      }
+    },
+    {
+      "id": "node-16b",
+      "name": "Send Email via ACS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 300],
+      "parameters": {
         "method": "POST",
-        "url": "https://api.resend.com/emails",
+        "url": "={{ $json._acsUrl }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
-            }
+            { "name": "date", "value": "={{ $json._acsDate }}" },
+            { "name": "x-ms-content-sha256", "value": "={{ $json._acsContentHash }}" },
+            { "name": "Authorization", "value": "={{ $json._acsAuthorization }}" },
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json._acsBody }}",
         "options": {}
       }
     },
@@ -282,32 +293,7 @@
       "position": [2660, 520],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const err = $input.first().json;\nlet topicName = err.topicName || null;\ntry { if (!topicName) topicName = $('Prepare OpenAI Body').first().json.topicName; } catch(e) {}\ntry { if (!topicName) topicName = $('Loop Over Items').first().json.name; } catch(e) {}\ntopicName = topicName || err.topicId || 'inconnu';\n\nreturn [{\n  json: {\n    subject: `[ERREUR Veille] Sujet \"${topicName}\" — ${new Date().toLocaleString('fr-FR')}`,\n    to: ['developer@reboot-conseil.com'],\n    htmlEmail: `<p>Une erreur est survenue dans le workflow de veille pour le sujet <strong>${topicName}</strong>.</p><p><strong>Erreur :</strong> ${err.message || JSON.stringify(err)}</p><p>L'exécution continue pour les autres sujets.</p>`\n  }\n}];"
-      }
-    },
-    {
-      "id": "node-err2",
-      "name": "Send Error Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2880, 520],
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.resend.com/emails",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ from: 'Veille Automatisée <onboarding@resend.dev>', to: $json.to, subject: $json.subject, html: $json.htmlEmail }) }}",
-        "options": {}
+        "jsCode": "// Silent skip — no email sent on error, continue to next topic\nreturn [{ json: { _skipped: true } }];"
       }
     }
   ],
@@ -369,17 +355,18 @@
       "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Build HTML Email": {
-      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]],
+      "main": [[{ "node": "Prepare ACS Email", "type": "main", "index": 0 }]],
       "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
-    "Send Email": {
+    "Prepare ACS Email": {
+      "main": [[{ "node": "Send Email via ACS", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+    },
+    "Send Email via ACS": {
       "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]],
       "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Format Error Alert": {
-      "main": [[{ "node": "Send Error Alert", "type": "main", "index": 0 }]]
-    },
-    "Send Error Alert": {
       "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
     }
   },

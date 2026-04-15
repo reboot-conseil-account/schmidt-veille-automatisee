@@ -109,11 +109,15 @@ services:
       GENERIC_TIMEZONE: ${TIMEZONE:-Europe/Paris}
       TZ: ${TIMEZONE:-Europe/Paris}
       # Used by n8n workflow nodes to call back into Convex
-      CONVEX_URL: http://convex-backend:3210
-      CONVEX_API_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
+      # Full-stack Docker: internal hostname. n8n-only dev: set CONVEX_URL in .env to your cloud/self-hosted URL
+      CONVEX_URL: ${CONVEX_URL:-http://convex-backend:3210}
+      CONVEX_API_KEY: ${CONVEX_API_KEY}
+      AZURE_COMMUNICATION_ENDPOINT: ${AZURE_COMMUNICATION_ENDPOINT}
+      AZURE_COMMUNICATION_ACCESS_KEY: ${AZURE_COMMUNICATION_ACCESS_KEY}
+      AZURE_COMMUNICATION_FROM_ADDRESS: ${AZURE_COMMUNICATION_FROM_ADDRESS}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       N8N_DIAGNOSTICS_ENABLED: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: "crypto"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/.n8n/workflows-backup
