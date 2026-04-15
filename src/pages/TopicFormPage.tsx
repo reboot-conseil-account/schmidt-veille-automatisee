@@ -17,6 +17,7 @@ interface FormState {
   rssUrls: string[];
   recipients: string[];
   active: boolean;
+  customQuery: string;
 }
 
 const defaultForm: FormState = {
@@ -25,6 +26,7 @@ const defaultForm: FormState = {
   rssUrls: [],
   recipients: [],
   active: true,
+  customQuery: "",
 };
 
 export function TopicFormPage() {
@@ -51,6 +53,7 @@ export function TopicFormPage() {
         rssUrls: topic.rssUrls,
         recipients: topic.recipients,
         active: topic.active,
+        customQuery: topic.customQuery ?? "",
       });
       setInitialized(true);
     }
@@ -58,11 +61,15 @@ export function TopicFormPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const payload = {
+      ...form,
+      customQuery: form.customQuery.trim() || undefined,
+    };
     if (isEdit) {
-      await update({ id: id as Id<"topics">, ...form });
+      await update({ id: id as Id<"topics">, ...payload });
       toast.success("Sujet mis à jour");
     } else {
-      await create(form);
+      await create(payload);
       toast.success("Sujet créé");
     }
     navigate("/topics");
@@ -101,6 +108,20 @@ export function TopicFormPage() {
               onChange={(keywords) => setForm({ ...form, keywords })}
               placeholder="Ex: machine learning"
             />
+
+            <div className="space-y-2">
+              <Label htmlFor="customQuery">Requête personnalisée Google News</Label>
+              <textarea
+                id="customQuery"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                value={form.customQuery}
+                onChange={(e) => setForm({ ...form, customQuery: e.target.value })}
+                placeholder='Ex: "intelligence artificielle" (OpenAI OR Anthropic) -jeu'
+              />
+              <p className="text-xs text-muted-foreground">
+                Opérateurs supportés&nbsp;: guillemets pour expression exacte, OR, parenthèses, - pour exclure. Génère un seul flux en plus des mots-clés.
+              </p>
+            </div>
 
             <ArrayFieldInput
               label="Flux RSS"

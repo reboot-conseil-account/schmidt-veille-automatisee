@@ -32,7 +32,11 @@ export function DigestHistoryPage() {
           onValueChange={(v) => setSelectedTopicId(v as Id<"topics">)}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Choisir un sujet…" />
+            <SelectValue placeholder="Choisir un sujet…">
+              {selectedTopicId
+                ? topics?.find((t) => t._id === selectedTopicId)?.name
+                : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {topics?.map((topic) => (

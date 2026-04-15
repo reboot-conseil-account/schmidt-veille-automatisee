@@ -32,6 +32,7 @@ export const create = mutation({
     rssUrls: v.array(v.string()),
     recipients: v.array(v.string()),
     active: v.boolean(),
+    customQuery: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("topics", args);
@@ -46,6 +47,7 @@ export const update = mutation({
     rssUrls: v.optional(v.array(v.string())),
     recipients: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
+    customQuery: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;

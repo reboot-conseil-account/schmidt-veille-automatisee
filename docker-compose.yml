@@ -1,53 +1,118 @@
 name: schmidt-veille
 
 services:
+  # ── Database (shared by n8n and Convex) ────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: veille-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-n8n}
+      POSTGRES_DB: n8n
       POSTGRES_USER: ${POSTGRES_USER:-n8n}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates the convex_self_hosted database on first boot
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ── Convex backend ─────────────────────────────────────────────────────────
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    container_name: veille-convex-backend
+    restart: unless-stopped
+    # Ports exposed to host for local dev only.
+    # On a VPS, remove these and let Caddy handle all public traffic.
+    ports:
+      - "${CONVEX_PORT:-3210}:3210"
+      - "${CONVEX_SITE_PORT:-3211}:3211"
+    environment:
+      # Public URLs as seen from the browser — update for production
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://localhost:3211}
+      # Use the shared Postgres instance (no database name — Convex picks convex_self_hosted)
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-n8n}:${POSTGRES_PASSWORD}@postgres:5432
+      DO_NOT_REQUIRE_SSL: "1"
+      INSTANCE_NAME: ${CONVEX_INSTANCE_NAME:-convex-self-hosted}
+      # Required: generate with `openssl rand -hex 32`
+      INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - convex_data:/convex/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3210/version"]
+      interval: 5s
+      timeout: 5s
+      start_period: 15s
+      retries: 12
+
+  # ── Convex dashboard ───────────────────────────────────────────────────────
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    container_name: veille-convex-dashboard
+    restart: unless-stopped
+    # Remove this port binding on a VPS — Caddy exposes it via DASHBOARD_DOMAIN
+    ports:
+      - "${DASHBOARD_PORT:-6791}:6791"
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+
+  # ── Convex function deploy (one-shot, re-run after code changes) ───────────
+  convex-deploy:
+    image: node:22-alpine
+    container_name: veille-convex-deploy
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "yarn install --frozen-lockfile &&
+             npx convex deploy --yes"
+    environment:
+      CONVEX_SELF_HOSTED_URL: http://convex-backend:3210
+      CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    restart: "no"
+
+  # ── n8n workflow automation ────────────────────────────────────────────────
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: veille-n8n
     restart: unless-stopped
+    # Remove this port binding on a VPS — Caddy exposes it via N8N_DOMAIN
     ports:
       - "5678:5678"
     environment:
-      # n8n core
       N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PORT: 5678
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      # Database
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-n8n}
       DB_POSTGRESDB_USER: ${POSTGRES_USER:-n8n}
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
-      # Timezone
       GENERIC_TIMEZONE: ${TIMEZONE:-Europe/Paris}
       TZ: ${TIMEZONE:-Europe/Paris}
-      # Convex
-      CONVEX_URL: ${CONVEX_URL}
-      CONVEX_API_KEY: ${CONVEX_API_KEY}
-      # Resend
+      # Used by n8n workflow nodes to call back into Convex
+      CONVEX_URL: http://convex-backend:3210
+      CONVEX_API_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
-      # Allow $env access in node expressions
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      # Telemetry
       N8N_DIAGNOSTICS_ENABLED: "false"
     volumes:
       - n8n_data:/home/node/.n8n
@@ -56,6 +121,49 @@ services:
       postgres:
         condition: service_healthy
 
+  # ── Frontend (React/Vite served by nginx) ──────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle — must be reachable from the user's browser
+        VITE_CONVEX_URL: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
+    container_name: veille-frontend
+    restart: unless-stopped
+    # Remove this port binding on a VPS — Caddy exposes it via APP_DOMAIN
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+
+  # ── Caddy reverse proxy + automatic HTTPS (VPS only) ──────────────────────
+  # For local dev you can leave this out; for VPS remove the port bindings
+  # above and point your DNS records to the VPS before starting this service.
+  caddy:
+    image: caddy:alpine
+    container_name: veille-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    env_file: .env
+    depends_on:
+      - frontend
+      - convex-backend
+      - n8n
+      - convex-dashboard
+    profiles:
+      - production
+
 volumes:
   postgres_data:
   n8n_data:
+  convex_data:
+  caddy_data:
+  caddy_config:

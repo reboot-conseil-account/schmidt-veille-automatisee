@@ -6,6 +6,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,11 +19,15 @@ import {
 
 interface TopicRowProps {
   topic: Doc<"topics">;
+  selected: boolean;
+  launching: boolean;
+  onSelect: (id: Doc<"topics">["_id"], selected: boolean) => void;
   onToggleActive: (id: Doc<"topics">["_id"], active: boolean) => void;
   onRemove: (id: Doc<"topics">["_id"]) => void;
+  onLaunch: (id: Doc<"topics">["_id"]) => void;
 }
 
-export function TopicRow({ topic, onToggleActive, onRemove }: TopicRowProps) {
+export function TopicRow({ topic, selected, launching, onSelect, onToggleActive, onRemove, onLaunch }: TopicRowProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function handleDelete() {
@@ -33,6 +38,12 @@ export function TopicRow({ topic, onToggleActive, onRemove }: TopicRowProps) {
 
   return (
     <TableRow>
+      <TableCell className="w-10">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(checked) => onSelect(topic._id, !!checked)}
+        />
+      </TableCell>
       <TableCell className="font-medium">{topic.name}</TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
@@ -56,6 +67,14 @@ export function TopicRow({ topic, onToggleActive, onRemove }: TopicRowProps) {
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onLaunch(topic._id)}
+            disabled={launching}
+          >
+            {launching ? "Lancement…" : "Lancer"}
+          </Button>
           <Button variant="outline" size="sm" render={<Link to={`/topics/${topic._id}`} />}>
             Modifier
           </Button>

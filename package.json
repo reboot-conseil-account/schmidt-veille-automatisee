@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "npx convex codegen && tsc && vite build",
     "preview": "vite preview",
-    "convex:dev": "npx convex dev",
+    "convex": "npx convex dev",
     "convex:deploy": "npx convex deploy"
   },
   "dependencies": {

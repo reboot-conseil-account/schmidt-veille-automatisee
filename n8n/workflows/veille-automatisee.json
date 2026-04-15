@@ -2,6 +2,19 @@
   "name": "Veille Automatisée",
   "nodes": [
     {
+      "id": "node-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 460],
+      "parameters": {
+        "path": "trigger-veille",
+        "responseMode": "onReceived",
+        "responseData": "noData"
+      },
+      "webhookId": "trigger-veille"
+    },
+    {
       "id": "node-1",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
@@ -72,7 +85,7 @@
       "position": [1120, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const topic = $input.first().json;\nconst items = [];\n\nfor (const url of (topic.rssUrls || [])) {\n  items.push({\n    json: {\n      feedUrl: url,\n      feedType: 'rss',\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nfor (const keyword of (topic.keywords || [])) {\n  items.push({\n    json: {\n      feedUrl: `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=fr&gl=FR&ceid=FR:fr`,\n      feedType: 'google_news',\n      keyword,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nreturn items;"
+        "jsCode": "const topic = $input.first().json;\nconst items = [];\n\nfor (const url of (topic.rssUrls || [])) {\n  items.push({\n    json: {\n      feedUrl: url,\n      feedType: 'rss',\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nfor (const keyword of (topic.keywords || [])) {\n  items.push({\n    json: {\n      feedUrl: `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=fr&gl=FR&ceid=FR:fr`,\n      feedType: 'google_news',\n      keyword,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nif (topic.customQuery) {\n  items.push({\n    json: {\n      feedUrl: `https://news.google.com/rss/search?q=${encodeURIComponent(topic.customQuery)}&hl=fr&gl=FR&ceid=FR:fr`,\n      feedType: 'google_news',\n      keyword: topic.customQuery,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nreturn items;"
       }
     },
     {
@@ -197,7 +210,7 @@
       "position": [2880, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const topic = $('Loop Over Items').first().json;\nconst raw = $input.first().json.choices?.[0]?.message?.content\n  || $input.first().json.message?.content\n  || $input.first().json.text\n  || '';\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`LLM_PARSE_ERROR: ${e.message} | Début: ${raw.slice(0, 300)}`);\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error(`LLM_STRUCTURE_ERROR: synthesis ou articles manquants`);\n}\n\nreturn [{\n  json: {\n    topicId: topic._id,\n    topicName: topic.name,\n    topicRecipients: topic.recipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
+        "jsCode": "const topic = $('Prepare OpenAI Body').first().json;\nconst raw = $input.first().json.choices?.[0]?.message?.content\n  || $input.first().json.message?.content\n  || $input.first().json.text\n  || '';\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`LLM_PARSE_ERROR: ${e.message} | Début: ${raw.slice(0, 300)}`);\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error(`LLM_STRUCTURE_ERROR: synthesis ou articles manquants`);\n}\n\nreturn [{\n  json: {\n    topicId: topic.topicId,\n    topicName: topic.topicName,\n    topicRecipients: topic.topicRecipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
       }
     },
     {
@@ -269,7 +282,7 @@
       "position": [2660, 520],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const err = $input.first().json;\nlet topicName = 'inconnu';\ntry { topicName = $('Loop Over Items').first().json.name; } catch(e) {}\n\nreturn [{\n  json: {\n    subject: `[ERREUR Veille] Sujet \"${topicName}\" — ${new Date().toLocaleString('fr-FR')}`,\n    to: ['developer@reboot-conseil.com'],\n    htmlEmail: `<p>Une erreur est survenue dans le workflow de veille pour le sujet <strong>${topicName}</strong>.</p><p><strong>Erreur :</strong> ${err.message || JSON.stringify(err)}</p><p>L'exécution continue pour les autres sujets.</p>`\n  }\n}];"
+        "jsCode": "const err = $input.first().json;\nlet topicName = err.topicName || null;\ntry { if (!topicName) topicName = $('Prepare OpenAI Body').first().json.topicName; } catch(e) {}\ntry { if (!topicName) topicName = $('Loop Over Items').first().json.name; } catch(e) {}\ntopicName = topicName || err.topicId || 'inconnu';\n\nreturn [{\n  json: {\n    subject: `[ERREUR Veille] Sujet \"${topicName}\" — ${new Date().toLocaleString('fr-FR')}`,\n    to: ['developer@reboot-conseil.com'],\n    htmlEmail: `<p>Une erreur est survenue dans le workflow de veille pour le sujet <strong>${topicName}</strong>.</p><p><strong>Erreur :</strong> ${err.message || JSON.stringify(err)}</p><p>L'exécution continue pour les autres sujets.</p>`\n  }\n}];"
       }
     },
     {
@@ -299,6 +312,9 @@
     }
   ],
   "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Get Active Topics", "type": "main", "index": 0 }]]
+    },
     "Schedule Trigger": {
       "main": [[{ "node": "Get Active Topics", "type": "main", "index": 0 }]]
     },
@@ -349,13 +365,16 @@
       "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Store in Convex": {
-      "main": [[{ "node": "Build HTML Email", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Build HTML Email", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Build HTML Email": {
-      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Send Email": {
-      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
     },
     "Format Error Alert": {
       "main": [[{ "node": "Send Error Alert", "type": "main", "index": 0 }]]
