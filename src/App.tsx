@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TopicsPage } from "@/pages/TopicsPage";
 import { TopicFormPage } from "@/pages/TopicFormPage";
 import { DigestHistoryPage } from "@/pages/DigestHistoryPage";
+import { MailingListsPage } from "@/pages/MailingListsPage";
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +39,14 @@ export const router = createBrowserRouter([
     element: (
       <AppShell>
         <DigestHistoryPage />
+      </AppShell>
+    ),
+  },
+  {
+    path: "/mailing-lists",
+    element: (
+      <AppShell>
+        <MailingListsPage />
       </AppShell>
     ),
   },

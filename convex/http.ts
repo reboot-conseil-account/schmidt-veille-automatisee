@@ -14,6 +14,7 @@ function verifyApiKey(request: Request): boolean {
 }
 
 // GET /api/topics — returns all active topics (called by n8n at workflow start)
+// If a topic has a mailingListId, its emails are merged into the recipients field.
 http.route({
   path: "/api/topics",
   method: "GET",
@@ -27,7 +28,20 @@ http.route({
 
     const topics = await ctx.runQuery(api.topics.getActive);
 
-    return new Response(JSON.stringify(topics), {
+    const resolved = await Promise.all(
+      topics.map(async (topic) => {
+        if (!topic.mailingListId) return topic;
+        const list = await ctx.runQuery(api.mailingLists.get, {
+          id: topic.mailingListId,
+        });
+        const merged = list
+          ? [...new Set([...topic.recipients, ...list.emails])]
+          : topic.recipients;
+        return { ...topic, recipients: merged };
+      })
+    );
+
+    return new Response(JSON.stringify(resolved), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

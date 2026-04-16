@@ -9,13 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ArrayFieldInput } from "@/components/topics/ArrayFieldInput";
-import { ArrowLeft, Save } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Save, List, Mail } from "lucide-react";
 
 interface FormState {
   name: string;
   keywords: string[];
   rssUrls: string[];
   recipients: string[];
+  mailingListId: Id<"mailingLists"> | null;
   active: boolean;
   customQuery: string;
 }
@@ -25,6 +33,7 @@ const defaultForm: FormState = {
   keywords: [],
   rssUrls: [],
   recipients: [],
+  mailingListId: null,
   active: true,
   customQuery: "",
 };
@@ -41,6 +50,7 @@ export function TopicFormPage() {
 
   const create = useMutation(api.topics.create);
   const update = useMutation(api.topics.update);
+  const mailingLists = useQuery(api.mailingLists.list);
 
   const [form, setForm] = useState<FormState>(defaultForm);
   const [initialized, setInitialized] = useState(false);
@@ -52,6 +62,7 @@ export function TopicFormPage() {
         keywords: topic.keywords,
         rssUrls: topic.rssUrls,
         recipients: topic.recipients,
+        mailingListId: topic.mailingListId ?? null,
         active: topic.active,
         customQuery: topic.customQuery ?? "",
       });
@@ -62,7 +73,12 @@ export function TopicFormPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
-      ...form,
+      name: form.name,
+      keywords: form.keywords,
+      rssUrls: form.rssUrls,
+      recipients: form.recipients,
+      mailingListId: form.mailingListId ?? undefined,
+      active: form.active,
       customQuery: form.customQuery.trim() || undefined,
     };
     if (isEdit) {
@@ -173,12 +189,85 @@ export function TopicFormPage() {
               placeholder="https://…"
             />
 
-            <ArrayFieldInput
-              label="Destinataires"
-              value={form.recipients}
-              onChange={(recipients) => setForm({ ...form, recipients })}
-              placeholder="email@exemple.com"
-            />
+            {/* Recipients: mailing list or manual */}
+            <div className="space-y-3">
+              <Label>Destinataires</Label>
+
+              {/* Mode toggle */}
+              <div className="flex rounded-lg border border-border/70 overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, mailingListId: null })}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 transition-colors ${
+                    form.mailingListId === null
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-transparent text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  Emails manuels
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, mailingListId: mailingLists?.[0]?._id ?? null })}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 transition-colors ${
+                    form.mailingListId !== null
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-transparent text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  Liste de diffusion
+                </button>
+              </div>
+
+              {form.mailingListId !== null ? (
+                <div className="space-y-2">
+                  <Select
+                    value={form.mailingListId ?? ""}
+                    onValueChange={(val) =>
+                      setForm({ ...form, mailingListId: val as Id<"mailingLists"> })
+                    }
+                  >
+                    <SelectTrigger className="w-full h-9">
+                      <SelectValue placeholder="Sélectionner une liste…">
+                        {form.mailingListId
+                          ? (mailingLists?.find((l) => l._id === form.mailingListId)?.name ?? "Chargement…")
+                          : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mailingLists?.length === 0 && (
+                        <SelectItem value="__empty__" disabled>
+                          Aucune liste disponible
+                        </SelectItem>
+                      )}
+                      {mailingLists?.map((list) => (
+                        <SelectItem key={list._id} value={list._id}>
+                          {list.name}{" "}
+                          <span className="text-muted-foreground">
+                            ({list.emails.length} destinataire{list.emails.length !== 1 ? "s" : ""})
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Les emails de la liste seront utilisés lors de l'envoi.{" "}
+                    <Link to="/mailing-lists" className="text-primary hover:underline">
+                      Gérer les listes →
+                    </Link>
+                  </p>
+                </div>
+              ) : (
+                <ArrayFieldInput
+                  label=""
+                  value={form.recipients}
+                  onChange={(recipients) => setForm({ ...form, recipients })}
+                  placeholder="email@exemple.com"
+                />
+              )}
+            </div>
 
             <div className="flex items-center gap-3 pt-1">
               <Switch

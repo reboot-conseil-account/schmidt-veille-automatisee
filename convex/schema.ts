@@ -2,11 +2,17 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  mailingLists: defineTable({
+    name: v.string(),
+    emails: v.array(v.string()),
+  }).index("by_name", ["name"]),
+
   topics: defineTable({
     name: v.string(),
     keywords: v.array(v.string()),
     rssUrls: v.array(v.string()),
     recipients: v.array(v.string()),
+    mailingListId: v.optional(v.id("mailingLists")),
     active: v.boolean(),
     customQuery: v.optional(v.string()),
   }).index("by_active", ["active"]),
