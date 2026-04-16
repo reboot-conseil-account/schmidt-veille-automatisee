@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrayFieldInput } from "@/components/topics/ArrayFieldInput";
+import { ArrowLeft, Save } from "lucide-react";
 
 interface FormState {
   name: string;
@@ -76,29 +76,50 @@ export function TopicFormPage() {
   }
 
   if (isEdit && topic === undefined) {
-    return <div className="text-muted-foreground text-sm">Chargement...</div>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-sm">Chargement…</span>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold">
-        {isEdit ? "Modifier le sujet" : "Nouveau sujet"}
-      </h1>
+    <div className="space-y-6 max-w-2xl animate-slide-up">
+      {/* Back link + title */}
+      <div>
+        <Link
+          to="/topics"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Retour aux sujets
+        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEdit ? "Modifier le sujet" : "Nouveau sujet"}
+        </h1>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Informations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Section: Informations générales */}
+        <section className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b bg-muted/20">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+              Informations générales
+            </h2>
+          </div>
+          <div className="px-6 py-5 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="name">Nom</Label>
+              <Label htmlFor="name">Nom du sujet</Label>
               <Input
                 id="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ex: Intelligence Artificielle"
+                placeholder="Ex : Intelligence Artificielle"
                 required
+                className="transition-shadow focus-visible:shadow-sm"
               />
             </div>
 
@@ -106,28 +127,50 @@ export function TopicFormPage() {
               label="Mots-clés"
               value={form.keywords}
               onChange={(keywords) => setForm({ ...form, keywords })}
-              placeholder="Ex: machine learning"
+              placeholder="Ex : machine learning"
             />
 
             <div className="space-y-2">
-              <Label htmlFor="customQuery">Requête personnalisée Google News</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="customQuery">Requête Bing avancée</Label>
+                {form.customQuery.trim() && (
+                  <a
+                    href={`https://www.bing.com/news/search?q=${encodeURIComponent(form.customQuery.trim())}&format=RSS&setlang=fr&cc=FR`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Tester →
+                  </a>
+                )}
+              </div>
               <textarea
                 id="customQuery"
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[88px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 transition-shadow focus-visible:shadow-sm resize-none"
                 value={form.customQuery}
                 onChange={(e) => setForm({ ...form, customQuery: e.target.value })}
-                placeholder='Ex: "intelligence artificielle" (OpenAI OR Anthropic) -jeu'
+                placeholder='"intelligence artificielle" (OpenAI OR Anthropic) -jeu'
               />
               <p className="text-xs text-muted-foreground">
-                Opérateurs supportés&nbsp;: guillemets pour expression exacte, OR, parenthèses, - pour exclure. Génère un seul flux en plus des mots-clés.
+                Recherche Bing combinée, en plus des mots-clés. Opérateurs : <code className="font-mono">"expression exacte"</code>, <code className="font-mono">OR</code>, <code className="font-mono">(groupes)</code>, <code className="font-mono">-exclusion</code>.
               </p>
             </div>
+          </div>
+        </section>
 
+        {/* Section: Distribution */}
+        <section className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b bg-muted/20">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+              Sources & Distribution
+            </h2>
+          </div>
+          <div className="px-6 py-5 space-y-5">
             <ArrayFieldInput
               label="Flux RSS"
               value={form.rssUrls}
               onChange={(rssUrls) => setForm({ ...form, rssUrls })}
-              placeholder="https://..."
+              placeholder="https://…"
             />
 
             <ArrayFieldInput
@@ -137,26 +180,30 @@ export function TopicFormPage() {
               placeholder="email@exemple.com"
             />
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 pt-1">
               <Switch
                 id="active"
                 checked={form.active}
                 onCheckedChange={(active) => setForm({ ...form, active })}
               />
-              <Label htmlFor="active">Actif</Label>
+              <Label htmlFor="active" className="cursor-pointer">
+                Sujet actif
+              </Label>
             </div>
+          </div>
+        </section>
 
-            <div className="flex gap-3 pt-2">
-              <Button type="submit">
-                {isEdit ? "Enregistrer" : "Créer"}
-              </Button>
-              <Button variant="outline" render={<Link to="/topics" />}>
-                Annuler
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+        {/* Actions */}
+        <div className="flex gap-3 pt-1">
+          <Button type="submit" className="gap-2 shadow-sm">
+            <Save className="h-4 w-4" />
+            {isEdit ? "Enregistrer les modifications" : "Créer le sujet"}
+          </Button>
+          <Button variant="outline" render={<Link to="/topics" />}>
+            Annuler
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

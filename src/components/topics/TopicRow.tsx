@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Loader2, Play, Pencil, Trash2 } from "lucide-react";
 
 interface TopicRowProps {
   topic: Doc<"topics">;
@@ -37,23 +38,25 @@ export function TopicRow({ topic, selected, launching, onSelect, onToggleActive,
   }
 
   return (
-    <TableRow>
+    <TableRow className="group animate-slide-up transition-colors hover:bg-muted/30">
       <TableCell className="w-10">
         <Checkbox
           checked={selected}
           onCheckedChange={(checked) => onSelect(topic._id, !!checked)}
         />
       </TableCell>
-      <TableCell className="font-medium">{topic.name}</TableCell>
+      <TableCell>
+        <span className="font-semibold text-foreground">{topic.name}</span>
+      </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
           {topic.keywords.slice(0, 3).map((kw) => (
-            <Badge key={kw} variant="outline" className="text-xs">
+            <Badge key={kw} variant="outline" className="text-xs border-border/60 bg-background">
               {kw}
             </Badge>
           ))}
           {topic.keywords.length > 3 && (
-            <Badge variant="outline" className="text-xs text-muted-foreground">
+            <Badge variant="outline" className="text-xs text-muted-foreground border-border/60">
               +{topic.keywords.length - 3}
             </Badge>
           )}
@@ -66,23 +69,42 @@ export function TopicRow({ topic, selected, launching, onSelect, onToggleActive,
         />
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity duration-150">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => onLaunch(topic._id)}
             disabled={launching}
+            className="h-8 gap-1.5 text-xs hover:bg-primary/10 hover:text-primary transition-colors"
           >
+            {launching
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Play className="h-3.5 w-3.5" />}
             {launching ? "Lancement…" : "Lancer"}
           </Button>
-          <Button variant="outline" size="sm" render={<Link to={`/topics/${topic._id}`} />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link to={`/topics/${topic._id}`} />}
+            className="h-8 gap-1.5 text-xs hover:bg-muted transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" />
             Modifier
           </Button>
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger render={<Button variant="destructive" size="sm" />}>
+            <DialogTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs hover:bg-destructive/10 hover:text-destructive transition-colors"
+                />
+              }
+            >
+              <Trash2 className="h-3.5 w-3.5" />
               Supprimer
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="animate-scale-in">
               <DialogHeader>
                 <DialogTitle>Supprimer le sujet</DialogTitle>
                 <DialogDescription>
