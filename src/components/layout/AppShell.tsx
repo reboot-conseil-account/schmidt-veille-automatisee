@@ -11,15 +11,22 @@ export function AppShell({ children }: AppShellProps) {
       <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur-md shadow-sm">
         <div className="mx-auto max-w-5xl px-6 h-14 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1">
-              <span className="w-1 h-5 bg-primary rounded-full block" />
-              <span className="w-1 h-3 bg-primary/40 rounded-full block" />
-            </div>
-            <span className="font-bold text-sm tracking-tight">
-              Veille <span className="text-primary">Schmidt</span>
-            </span>
-          </div>
+          <div
+            aria-label="Schmidt Group"
+            style={{
+              height: "2rem",
+              width: "8rem",
+              backgroundColor: "var(--primary)",
+              maskImage: "url(/logo.png)",
+              maskRepeat: "no-repeat",
+              maskSize: "contain",
+              maskPosition: "left center",
+              WebkitMaskImage: "url(/logo.png)",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskSize: "contain",
+              WebkitMaskPosition: "left center",
+            }}
+          />
 
           {/* Nav */}
           <nav className="flex items-center gap-1">
