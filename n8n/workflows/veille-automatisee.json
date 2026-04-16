@@ -6,7 +6,10 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 460],
+      "position": [
+        240,
+        460
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "trigger-veille",
@@ -20,14 +23,19 @@
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
             {
               "field": "weeks",
               "weeksInterval": 1,
-              "triggerAtDay": [1],
+              "triggerAtDay": [
+                1
+              ],
               "triggerAtHour": 7,
               "triggerAtMinute": 0
             }
@@ -40,7 +48,10 @@
       "name": "Get Active Topics",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "parameters": {
         "method": "GET",
         "url": "={{ $env.CONVEX_URL }}/api/topics",
@@ -61,7 +72,10 @@
       "name": "Split Topics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const d = new Date();\nconst day = d.getDay();\nconst diff = day === 0 ? -6 : 1 - day;\nd.setDate(d.getDate() + diff);\nconst weekStart = d.toISOString().split('T')[0];\n\nreturn $input.all().map(item => ({\n  json: { ...item.json, weekStart }\n}));"
@@ -72,7 +86,10 @@
       "name": "Loop Over Items",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [900, 300],
+      "position": [
+        900,
+        300
+      ],
       "parameters": {
         "batchSize": 1,
         "options": {}
@@ -83,7 +100,10 @@
       "name": "Build All Feed URLs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300],
+      "position": [
+        1120,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const topic = $input.first().json;\nconst items = [];\n\nfor (const url of (topic.rssUrls || [])) {\n  items.push({\n    json: {\n      feedUrl: url,\n      feedType: 'rss',\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nfor (const keyword of (topic.keywords || [])) {\n  items.push({\n    json: {\n      feedUrl: `https://www.bing.com/news/search?q=${encodeURIComponent(keyword)}&format=RSS&setlang=fr&cc=FR`,\n      feedType: 'bing_news',\n      keyword,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nif (topic.customQuery) {\n  items.push({\n    json: {\n      feedUrl: `https://www.bing.com/news/search?q=${encodeURIComponent(topic.customQuery)}&format=RSS&setlang=fr&cc=FR`,\n      feedType: 'bing_news',\n      keyword: topic.customQuery,\n      topicId: topic._id,\n      topicName: topic.name,\n      topicRecipients: topic.recipients,\n      weekStart: topic.weekStart\n    }\n  });\n}\n\nreturn items;"
@@ -94,7 +114,10 @@
       "name": "Fetch All Feeds",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 300],
+      "position": [
+        1340,
+        300
+      ],
       "continueOnFail": true,
       "parameters": {
         "method": "GET",
@@ -118,7 +141,10 @@
       "name": "Normalize Articles",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 300],
+      "position": [
+        1560,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const topic = $('Loop Over Items').first().json;\nconst allArticles = [];\n\nfor (const inputItem of $input.all()) {\n  if (inputItem.json.error) continue;\n  const xmlText = inputItem.json.data || '';\n  if (!xmlText || typeof xmlText !== 'string') continue;\n\n  const itemRegex = /<item>([\\s\\S]*?)<\\/item>|<entry>([\\s\\S]*?)<\\/entry>/g;\n  let match;\n  while ((match = itemRegex.exec(xmlText)) !== null) {\n    const itemXml = match[1] || match[2];\n\n    const getTag = (tag) => {\n      const m = itemXml.match(new RegExp(`<${tag}(?:[^>]*)>(?:<!\\\\[CDATA\\\\[)?([\\\\s\\\\S]*?)(?:\\\\]\\\\]>)?<\\/${tag}>`));\n      return m ? m[1].trim() : '';\n    };\n\n    const title = getTag('title');\n    let url = getTag('link');\n    if (!url) {\n      const m = itemXml.match(/<link[^>]*href=\"([^\"]+)\"/);\n      url = m ? m[1] : getTag('guid');\n    }\n    const pubDate = getTag('pubDate') || getTag('published') || getTag('updated');\n    const content = (getTag('description') || getTag('summary') || '').replace(/<[^>]+>/g, '').slice(0, 500);\n\n    if (!title || !url) continue;\n\n    let source = '';\n    try { source = new URL(url).hostname.replace('www.', ''); } catch(e) { source = 'unknown'; }\n\n    allArticles.push({\n      json: { title, url, pubDate, content, source, topicId: topic._id, topicName: topic.name, topicRecipients: topic.recipients, weekStart: topic.weekStart }\n    });\n  }\n}\n\nreturn allArticles;"
@@ -129,7 +155,10 @@
       "name": "Deduplicate by URL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 300],
+      "position": [
+        1780,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const seen = new Set();\nreturn $input.all().filter(item => {\n  const url = item.json.url;\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n  return true;\n}).map(item => ({ json: item.json }));"
@@ -140,7 +169,10 @@
       "name": "Filter Last 7 Days",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 300],
+      "position": [
+        2000,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;\nreturn $input.all().filter(item => {\n  const pub = new Date(item.json.pubDate).getTime();\n  return !isNaN(pub) && pub >= sevenDaysAgo;\n}).map(item => ({ json: item.json }));"
@@ -151,7 +183,10 @@
       "name": "Sort and Cap at 50",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2220, 300],
+      "position": [
+        2220,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "return $input.all()\n  .sort((a, b) => new Date(b.json.pubDate) - new Date(a.json.pubDate))\n  .slice(0, 30)\n  .map(item => ({ json: item.json }));"
@@ -162,7 +197,10 @@
       "name": "Aggregate for LLM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2440, 300],
+      "position": [
+        2440,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const articles = $input.all().map(i => i.json);\nconst topic = $('Loop Over Items').first().json;\n\nif (articles.length === 0) {\n  throw new Error(`Aucun article trouvé pour le sujet \"${topic.name}\" cette semaine.`);\n}\n\nconst articleList = articles.map((a, i) =>\n  `[${i+1}] TITRE: ${a.title}\\nSOURCE: ${a.source}\\nDATE: ${a.pubDate}\\nURL: ${a.url}`\n).join('\\n\\n---\\n\\n');\n\nreturn [{\n  json: {\n    topicId: topic._id,\n    topicName: topic.name,\n    topicRecipients: topic.recipients,\n    weekStart: topic.weekStart,\n    articleCount: articles.length,\n    articleList,\n    rawArticles: articles\n  }\n}];"
@@ -173,7 +211,10 @@
       "name": "Prepare OpenAI Body",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2550, 300],
+      "position": [
+        2550,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const d = $input.first().json;\nconst requestBody = {\n  model: 'gpt-5-mini',\n\n  max_completion_tokens: 16000,\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un analyste expert en veille stratégique, spécialisé dans le domaine \"' + d.topicName + '\". Tu dois TOUJOURS répondre avec un JSON valide, sans markdown, sans commentaire, uniquement le JSON brut.'\n    },\n    {\n      role: 'user',\n      content: 'Voici ' + d.articleCount + ' articles collectés cette semaine sur le sujet \"' + d.topicName + '\".\\n\\n' + d.articleList + '\\n\\nAnalyse ces articles et réponds UNIQUEMENT avec ce JSON (pas de markdown, juste le JSON brut) :\\n\\n{\"synthesis\": \"Synthèse executive en 5-7 phrases sur les tendances clés de la semaine.\", \"articles\": [{\"title\": \"titre exact\", \"url\": \"url exacte\", \"source\": \"nom de la source\", \"category\": \"Stratégie|Innovation|Marchés|Réglementation|International|Autre\", \"summary\": \"résumé en 1 phrase\"}]}\\n\\nRègles : inclus TOUS les articles, hors sujet = category Autre, n invente rien.'\n    }\n  ]\n};\n\nreturn [{\n  json: {\n    topicId: d.topicId,\n    topicName: d.topicName,\n    topicRecipients: d.topicRecipients,\n    weekStart: d.weekStart,\n    articleCount: d.articleCount,\n    rawArticles: d.rawArticles,\n    requestBody\n  }\n}];"
@@ -184,7 +225,10 @@
       "name": "OpenAI Analysis",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 300],
+      "position": [
+        2660,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://api.openai.com/v1/chat/completions",
@@ -208,10 +252,13 @@
       "name": "Parse LLM Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2880, 300],
+      "position": [
+        2880,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const openAiResponse = $input.first().json;\nconst topic = $('Prepare OpenAI Body').first().json;\nconst raw = openAiResponse.choices?.[0]?.message?.content\n  || openAiResponse.message?.content\n  || openAiResponse.text\n  || '';\n\nif (!raw) throw new Error('LLM_EMPTY_RESPONSE');\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim()\n    .replace(/\\\\(?![\"\\\\\\\/bfnrtu])/g, '\\\\\\\\');\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e1) {\n    let repaired = '';\n    let inString = false;\n    let i = 0;\n    while (i < cleaned.length) {\n      const ch = cleaned[i];\n      if (ch === '\\\\' && inString) {\n        repaired += ch + (cleaned[i + 1] || '');\n        i += 2;\n        continue;\n      }\n      if (ch === '\"') {\n        if (!inString) {\n          inString = true;\n          repaired += ch;\n        } else {\n          let j = i + 1;\n          while (j < cleaned.length && cleaned[j] === ' ') j++;\n          const next = cleaned[j];\n          if (next === ':' || next === ',' || next === '}' || next === ']' || j >= cleaned.length) {\n            inString = false;\n            repaired += ch;\n          } else {\n            repaired += '\\\\\"';\n          }\n        }\n      } else {\n        repaired += ch;\n      }\n      i++;\n    }\n    parsed = JSON.parse(repaired);\n  }\n} catch (e) {\n  throw new Error('LLM_PARSE_ERROR: ' + e.message + ' | Debut: ' + raw.slice(0, 300));\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error('LLM_STRUCTURE_ERROR: synthesis ou articles manquants');\n}\n\nreturn [{\n  json: {\n    topicId: topic.topicId,\n    topicName: topic.topicName,\n    topicRecipients: topic.topicRecipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
+        "jsCode": "const openAiResponse = $input.first().json;\nconst topic = $('Prepare OpenAI Body').first().json;\nconst raw = openAiResponse.choices?.[0]?.message?.content\n  || openAiResponse.message?.content\n  || openAiResponse.text\n  || '';\n\nif (!raw) throw new Error('LLM_EMPTY_RESPONSE');\n\nlet parsed;\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/i, '')\n    .trim()\n    .replace(/\\\\(?![\"\\\\\\/bfnrtu])/g, '\\\\\\\\');\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e1) {\n    let repaired = '';\n    let inString = false;\n    let i = 0;\n    while (i < cleaned.length) {\n      const ch = cleaned[i];\n      if (ch === '\\\\' && inString) {\n        repaired += ch + (cleaned[i + 1] || '');\n        i += 2;\n        continue;\n      }\n      if (ch === '\"') {\n        if (!inString) {\n          inString = true;\n          repaired += ch;\n        } else {\n          let j = i + 1;\n          while (j < cleaned.length && cleaned[j] === ' ') j++;\n          const next = cleaned[j];\n          if (next === ':' || next === ',' || next === '}' || next === ']' || j >= cleaned.length) {\n            inString = false;\n            repaired += ch;\n          } else {\n            repaired += '\\\\\"';\n          }\n        }\n      } else {\n        repaired += ch;\n      }\n      i++;\n    }\n    parsed = JSON.parse(repaired);\n  }\n} catch (e) {\n  throw new Error('LLM_PARSE_ERROR: ' + e.message + ' | Debut: ' + raw.slice(0, 300));\n}\n\nif (!parsed.synthesis || !Array.isArray(parsed.articles)) {\n  throw new Error('LLM_STRUCTURE_ERROR: synthesis ou articles manquants');\n}\n\nreturn [{\n  json: {\n    topicId: topic.topicId,\n    topicName: topic.topicName,\n    topicRecipients: topic.topicRecipients,\n    weekStart: topic.weekStart,\n    synthesis: parsed.synthesis,\n    articles: parsed.articles,\n    generatedAt: Date.now()\n  }\n}];"
       }
     },
     {
@@ -219,7 +266,10 @@
       "name": "Store in Convex",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3100, 300],
+      "position": [
+        3100,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.CONVEX_URL }}/api/results",
@@ -244,10 +294,13 @@
       "name": "Build HTML Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3320, 300],
+      "position": [
+        3320,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const data = $('Parse LLM Output').first().json;\nconst weekLabel = new Date(data.weekStart).toLocaleDateString('fr-FR', {\n  day: 'numeric', month: 'long', year: 'numeric'\n});\n\nconst categoryOrder = ['Stratégie', 'Innovation', 'Marchés', 'Réglementation', 'International', 'Autre'];\nconst byCategory = {};\nfor (const article of data.articles) {\n  const cat = article.category || 'Autre';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(article);\n}\n\nconst categoryBlocks = categoryOrder\n  .filter(cat => byCategory[cat])\n  .map(cat => {\n    const items = byCategory[cat].map(a =>\n      '<div style=\"margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0;\">'\n      + '<a href=\"' + a.url + '\" style=\"color:#C0272D;font-weight:600;text-decoration:none;font-size:14px;\">' + a.title + '</a><br>'\n      + '<span style=\"color:#999;font-size:12px;\">' + a.source + '</span>'\n      + '<p style=\"margin:6px 0 0;color:#555;font-size:13px;line-height:1.6;\">' + a.summary + '</p>'\n      + '</div>'\n    ).join('');\n    return '<div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #C0272D;padding-bottom:5px;margin:24px 0 12px;\">' + cat + '</div>' + items;\n  }).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;\">\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f2f2f2;\"><tr><td align=\"center\" style=\"padding:24px 16px;\">\n<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;\">\n<tr><td style=\"background:#C0272D;padding:32px 40px;text-align:center;\">\n  <div style=\"color:#ffffff;font-size:46px;font-weight:300;letter-spacing:4px;line-height:1;font-family:Georgia,serif;\">Schmidt</div>\n  <div style=\"color:rgba(255,255,255,0.9);font-size:12px;letter-spacing:8px;margin-top:4px;font-family:Arial,sans-serif;\">GROUPE</div>\n  <div style=\"height:1px;background:rgba(255,255,255,0.25);margin:18px 0;\"></div>\n  <div style=\"color:#ffffff;font-size:18px;font-weight:600;\">Veille ${data.topicName}</div>\n  <div style=\"color:rgba(255,255,255,0.8);font-size:13px;margin-top:6px;\">Semaine du ${weekLabel} &middot; ${data.articles.length} articles analysés</div>\n</td></tr>\n<tr><td style=\"padding:28px 36px 16px;\">\n  <div style=\"border-left:4px solid #C0272D;padding:14px 18px;background:#fdf5f5;\">\n    <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;\">Synthèse de la semaine</div>\n    <div style=\"font-size:14px;line-height:1.75;color:#333;\">${data.synthesis}</div>\n  </div>\n</td></tr>\n<tr><td style=\"padding:0 36px 36px;\">\n  <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px;\">Articles par catégorie</div>\n  ${categoryBlocks}\n</td></tr>\n<tr><td style=\"background:#C0272D;padding:14px 36px;text-align:center;\">\n  <div style=\"color:rgba(255,255,255,0.7);font-size:11px;\">Généré le ${new Date(data.generatedAt).toLocaleString('fr-FR')} &middot; Schmidt Groupe &middot; Veille Automatisée</div>\n</td></tr>\n</table>\n</td></tr></table>\n</body></html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlEmail: html,\n    subject: `[Veille ${data.topicName}] Semaine du ${weekLabel} — ${data.articles.length} articles`,\n    to: data.topicRecipients || []\n  }\n}];"
+        "jsCode": "const data = $('Parse LLM Output').first().json;\nconst weekLabel = new Date(data.weekStart).toLocaleDateString('fr-FR', {\n  day: 'numeric', month: 'long', year: 'numeric'\n});\n\nconst categoryOrder = ['Stratégie', 'Innovation', 'Marchés', 'Réglementation', 'International', 'Autre'];\nconst byCategory = {};\nfor (const article of data.articles) {\n  const cat = article.category || 'Autre';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(article);\n}\n\nconst categoryBlocks = categoryOrder\n  .filter(cat => byCategory[cat])\n  .map(cat => {\n    const items = byCategory[cat].map(a =>\n      '<div style=\"margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0;\">'\n      + '<a href=\"' + a.url + '\" style=\"color:#C0272D;font-weight:600;text-decoration:none;font-size:14px;\">' + a.title + '</a><br>'\n      + '<span style=\"color:#999;font-size:12px;\">' + a.source + '</span>'\n      + '<p style=\"margin:6px 0 0;color:#555;font-size:13px;line-height:1.6;\">' + a.summary + '</p>'\n      + '</div>'\n    ).join('');\n    return '<div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #C0272D;padding-bottom:5px;margin:24px 0 12px;\">' + cat + '</div>' + items;\n  }).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;\">\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f2f2f2;\"><tr><td align=\"center\" style=\"padding:24px 16px;\">\n<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;\">\n<tr><td style=\"background:#C0272D;padding:32px 40px;text-align:center;\">\n  <img src=\"data:image/png;base64,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\" alt=\"Schmidt Groupe\" style=\"max-height:70px;width:auto;\" />\n  <div style=\"height:1px;background:rgba(255,255,255,0.25);margin:18px 0;\"></div>\n  <div style=\"color:#ffffff;font-size:18px;font-weight:600;\">Veille ${data.topicName}</div>\n  <div style=\"color:rgba(255,255,255,0.8);font-size:13px;margin-top:6px;\">Semaine du ${weekLabel} &middot; ${data.articles.length} articles analysés</div>\n</td></tr>\n<tr><td style=\"padding:28px 36px 16px;\">\n  <div style=\"border-left:4px solid #C0272D;padding:14px 18px;background:#fdf5f5;\">\n    <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;\">Synthèse de la semaine</div>\n    <div style=\"font-size:14px;line-height:1.75;color:#333;\">${data.synthesis}</div>\n  </div>\n</td></tr>\n<tr><td style=\"padding:0 36px 36px;\">\n  <div style=\"font-size:11px;font-weight:700;color:#C0272D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px;\">Articles par catégorie</div>\n  ${categoryBlocks}\n</td></tr>\n<tr><td style=\"background:#C0272D;padding:14px 36px;text-align:center;\">\n  <div style=\"color:rgba(255,255,255,0.7);font-size:11px;\">Généré le ${new Date(data.generatedAt).toLocaleString('fr-FR')} &middot; Schmidt Groupe &middot; Veille Automatisée</div>\n</td></tr>\n</table>\n</td></tr></table>\n</body></html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlEmail: html,\n    subject: `[Veille ${data.topicName}] Semaine du ${weekLabel} — ${data.articles.length} articles`,\n    to: data.topicRecipients || []\n  }\n}];"
       }
     },
     {
@@ -255,7 +308,10 @@
       "name": "Prepare ACS Email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3540, 300],
+      "position": [
+        3540,
+        300
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const crypto = require('crypto');\nconst data = $input.first().json;\nconst endpoint = $env.AZURE_COMMUNICATION_ENDPOINT;\nconst accessKey = $env.AZURE_COMMUNICATION_ACCESS_KEY;\nconst fromAddress = $env.AZURE_COMMUNICATION_FROM_ADDRESS;\n\nconst bodyObj = {\n  senderAddress: fromAddress,\n  content: { subject: data.subject, html: data.htmlEmail },\n  recipients: { to: (data.to || []).map(addr => ({ address: addr })) }\n};\nconst bodyStr = JSON.stringify(bodyObj);\n\nconst pathAndQuery = '/emails:send?api-version=2023-03-31';\nconst host = endpoint.replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\nconst fullUrl = endpoint.replace(/\\/$/, '') + pathAndQuery;\nconst dateStr = new Date().toUTCString();\n\nconst contentHash = crypto.createHash('sha256').update(bodyStr).digest('base64');\nconst stringToSign = 'POST\\n' + pathAndQuery + '\\n' + dateStr + ';' + host + ';' + contentHash;\nconst signature = crypto.createHmac('sha256', Buffer.from(accessKey, 'base64')).update(stringToSign).digest('base64');\nconst authorization = 'HMAC-SHA256 SignedHeaders=date;host;x-ms-content-sha256&Signature=' + signature;\n\nreturn [{ json: { ...data, _acsUrl: fullUrl, _acsBody: bodyStr, _acsDate: dateStr, _acsContentHash: contentHash, _acsAuthorization: authorization } }];"
@@ -266,17 +322,32 @@
       "name": "Send Email via ACS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3760, 300],
+      "position": [
+        3760,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $json._acsUrl }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "date", "value": "={{ $json._acsDate }}" },
-            { "name": "x-ms-content-sha256", "value": "={{ $json._acsContentHash }}" },
-            { "name": "Authorization", "value": "={{ $json._acsAuthorization }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "date",
+              "value": "={{ $json._acsDate }}"
+            },
+            {
+              "name": "x-ms-content-sha256",
+              "value": "={{ $json._acsContentHash }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json._acsAuthorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -291,7 +362,10 @@
       "name": "Format Error Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2660, 520],
+      "position": [
+        2660,
+        520
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "// Silent skip — no email sent on error, continue to next topic\nreturn [{ json: { _skipped: true } }];"
@@ -300,75 +374,297 @@
   ],
   "connections": {
     "Webhook Trigger": {
-      "main": [[{ "node": "Get Active Topics", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Get Active Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Schedule Trigger": {
-      "main": [[{ "node": "Get Active Topics", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Get Active Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Active Topics": {
-      "main": [[{ "node": "Split Topics", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Split Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Split Topics": {
-      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Loop Over Items": {
       "main": [
         [],
-        [{ "node": "Build All Feed URLs", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Build All Feed URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build All Feed URLs": {
-      "main": [[{ "node": "Fetch All Feeds", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Fetch All Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch All Feeds": {
-      "main": [[{ "node": "Normalize Articles", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Normalize Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normalize Articles": {
-      "main": [[{ "node": "Deduplicate by URL", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Deduplicate by URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Deduplicate by URL": {
-      "main": [[{ "node": "Filter Last 7 Days", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Filter Last 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filter Last 7 Days": {
-      "main": [[{ "node": "Sort and Cap at 50", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Sort and Cap at 50",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Sort and Cap at 50": {
-      "main": [[{ "node": "Aggregate for LLM", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Aggregate for LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Aggregate for LLM": {
-      "main": [[{ "node": "Prepare OpenAI Body", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Prepare OpenAI Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Prepare OpenAI Body": {
-      "main": [[{ "node": "OpenAI Analysis", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "OpenAI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "OpenAI Analysis": {
-      "main": [[{ "node": "Parse LLM Output", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parse LLM Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse LLM Output": {
-      "main": [[{ "node": "Store in Convex", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Store in Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Store in Convex": {
-      "main": [[{ "node": "Build HTML Email", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build HTML Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build HTML Email": {
-      "main": [[{ "node": "Prepare ACS Email", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Prepare ACS Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Prepare ACS Email": {
-      "main": [[{ "node": "Send Email via ACS", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Email via ACS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Send Email via ACS": {
-      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]],
-      "error": [[{ "node": "Format Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Error Alert": {
-      "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
