@@ -14,17 +14,36 @@ interface ArticleItemProps {
 }
 
 /** Extract the real destination URL from Bing news redirect URLs. */
+function decodeHtmlEntities(url: string): string {
+  return url
+    .replace(/&amp;/gi, "&")
+    .replace(/&#38;/g, "&")
+    .replace(/&#x26;/gi, "&");
+}
+
 function resolveUrl(url: string): string {
   try {
-    const parsed = new URL(url);
-    if (parsed.hostname.endsWith("bing.com")) {
-      const real = parsed.searchParams.get("url");
-      if (real) return real;
+    const normalized = decodeHtmlEntities(url);
+    const parsed = new URL(normalized);
+    if (!parsed.hostname.endsWith("bing.com")) return normalized;
+
+    const real = parsed.searchParams.get("url");
+    if (real) return real;
+
+    const encoded = parsed.searchParams.get("u");
+    if (encoded?.startsWith("a1")) {
+      const base64 = encoded
+        .slice(2)
+        .replace(/-/g, "+")
+        .replace(/_/g, "/")
+        .padEnd(Math.ceil((encoded.length - 2) / 4) * 4, "=");
+      const decoded = atob(base64);
+      if (decoded.startsWith("http")) return decoded;
     }
   } catch {
     // not a valid URL, return as-is
   }
-  return url;
+  return decodeHtmlEntities(url);
 }
 
 export function ArticleItem({ article }: ArticleItemProps) {

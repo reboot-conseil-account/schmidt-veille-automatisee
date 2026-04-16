@@ -18,12 +18,20 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save, List, Mail } from "lucide-react";
 
+const AGE_PRESETS = [
+  { label: "7 jours", value: 7 },
+  { label: "14 jours", value: 14 },
+  { label: "30 jours", value: 30 },
+  { label: "90 jours", value: 90 },
+];
+
 interface FormState {
   name: string;
   keywords: string[];
   rssUrls: string[];
   recipients: string[];
   mailingListId: Id<"mailingLists"> | null;
+  maxAgeDays: number | null;
   active: boolean;
   customQuery: string;
 }
@@ -34,6 +42,7 @@ const defaultForm: FormState = {
   rssUrls: [],
   recipients: [],
   mailingListId: null,
+  maxAgeDays: 30,
   active: true,
   customQuery: "",
 };
@@ -63,6 +72,7 @@ export function TopicFormPage() {
         rssUrls: topic.rssUrls,
         recipients: topic.recipients,
         mailingListId: topic.mailingListId ?? null,
+        maxAgeDays: topic.maxAgeDays ?? 30,
         active: topic.active,
         customQuery: topic.customQuery ?? "",
       });
@@ -78,6 +88,7 @@ export function TopicFormPage() {
       rssUrls: form.rssUrls,
       recipients: form.recipients,
       mailingListId: form.mailingListId ?? undefined,
+      maxAgeDays: form.maxAgeDays ?? undefined,
       active: form.active,
       customQuery: form.customQuery.trim() || undefined,
     };
@@ -169,6 +180,50 @@ export function TopicFormPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Recherche Bing combinée, en plus des mots-clés. Opérateurs : <code className="font-mono">"expression exacte"</code>, <code className="font-mono">OR</code>, <code className="font-mono">(groupes)</code>, <code className="font-mono">-exclusion</code>.
+              </p>
+            </div>
+
+            {/* Max article age */}
+            <div className="space-y-2">
+              <Label>Ancienneté maximale des articles</Label>
+              <div className="flex flex-wrap gap-2">
+                {AGE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, maxAgeDays: preset.value })}
+                    className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
+                      form.maxAgeDays === preset.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-transparent text-muted-foreground border-border/70 hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={
+                      form.maxAgeDays !== null &&
+                      !AGE_PRESETS.some((p) => p.value === form.maxAgeDays)
+                        ? form.maxAgeDays
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setForm({ ...form, maxAgeDays: isNaN(v) ? null : v });
+                    }}
+                    placeholder="Autre…"
+                    className="w-24 h-8 text-sm"
+                  />
+                  <span className="text-sm text-muted-foreground">jours</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Seuls les articles publiés dans cette fenêtre seront inclus dans la synthèse.
               </p>
             </div>
           </div>

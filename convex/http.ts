@@ -2,6 +2,49 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 
+/**
+ * Resolve a Bing redirect URL to its final destination.
+ *
+ * Bing News RSS links come in two main formats:
+ *   1. apiclick.aspx?...&url=https%3A%2F%2F...  → real URL in `url` query param
+ *   2. /ck/a?...&u=a1<base64url>...             → real URL base64-encoded in `u` param
+ *
+ * For any other URL (or if extraction fails) the original is returned unchanged.
+ */
+function decodeHtmlEntities(raw: string): string {
+  return raw
+    .replace(/&amp;/gi, "&")
+    .replace(/&#38;/g, "&")
+    .replace(/&#x26;/gi, "&");
+}
+
+function resolveBingUrl(raw: string): string {
+  try {
+    const normalized = decodeHtmlEntities(raw);
+    const parsed = new URL(normalized);
+    if (!parsed.hostname.endsWith("bing.com")) return normalized;
+
+    // Format 1: explicit `url` query parameter
+    const urlParam = parsed.searchParams.get("url");
+    if (urlParam) return urlParam;
+
+    // Format 2: base64-encoded URL in `u` parameter, prefixed with "a1"
+    const uParam = parsed.searchParams.get("u");
+    if (uParam?.startsWith("a1")) {
+      const base64 = uParam
+        .slice(2)
+        .replace(/-/g, "+")
+        .replace(/_/g, "/")
+        .padEnd(Math.ceil((uParam.length - 2) / 4) * 4, "=");
+      const decoded = atob(base64);
+      if (decoded.startsWith("http")) return decoded;
+    }
+  } catch {
+    // malformed URL — fall through
+  }
+  return decodeHtmlEntities(raw);
+}
+
 const http = httpRouter();
 
 function verifyApiKey(request: Request): boolean {
@@ -84,7 +127,10 @@ http.route({
       topicId: b.topicId,
       weekStart: b.weekStart,
       synthesis: b.synthesis,
-      articles: b.articles,
+      articles: b.articles.map((article: any) => ({
+        ...article,
+        url: typeof article?.url === "string" ? resolveBingUrl(article.url) : article?.url,
+      })),
       generatedAt: b.generatedAt ?? Date.now(),
     });
 

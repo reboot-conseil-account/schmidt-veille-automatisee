@@ -13,6 +13,7 @@ export default defineSchema({
     rssUrls: v.array(v.string()),
     recipients: v.array(v.string()),
     mailingListId: v.optional(v.id("mailingLists")),
+    maxAgeDays: v.optional(v.number()),
     active: v.boolean(),
     customQuery: v.optional(v.string()),
   }).index("by_active", ["active"]),

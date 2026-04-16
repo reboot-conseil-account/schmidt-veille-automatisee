@@ -69,6 +69,19 @@ export function AppShell({ children }: AppShellProps) {
             >
               Listes
             </NavLink>
+            <NavLink
+              to="/tech-stack"
+              className={({ isActive }) =>
+                cn(
+                  "relative px-3.5 py-1.5 text-sm rounded-md transition-all duration-200 font-medium",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                )
+              }
+            >
+              Tech Stack
+            </NavLink>
           </nav>
         </div>
       </header>

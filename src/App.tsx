@@ -4,6 +4,7 @@ import { TopicsPage } from "@/pages/TopicsPage";
 import { TopicFormPage } from "@/pages/TopicFormPage";
 import { DigestHistoryPage } from "@/pages/DigestHistoryPage";
 import { MailingListsPage } from "@/pages/MailingListsPage";
+import { TechStackPage } from "@/pages/TechStackPage";
 
 export const router = createBrowserRouter([
   {
@@ -47,6 +48,14 @@ export const router = createBrowserRouter([
     element: (
       <AppShell>
         <MailingListsPage />
+      </AppShell>
+    ),
+  },
+  {
+    path: "/tech-stack",
+    element: (
+      <AppShell>
+        <TechStackPage />
       </AppShell>
     ),
   },
